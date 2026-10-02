@@ -1,0 +1,85 @@
+spanning-tree mode rapid-pvst
+vlan 10
+ name HQ-USERS
+vlan 30
+ name HQ-SERVERS
+vlan 99
+ name MANAGEMENT
+vlan 999
+ name UNUSED-NATIVE
+interface range FastEthernet0/1-2
+ description # HQ user PC access ports
+ switchport mode access
+ switchport access vlan 10
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+interface FastEthernet0/3
+ description # HQ-INFRA-SRV FastEthernet0
+ switchport mode access
+ switchport access vlan 30
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+interface FastEthernet0/4
+ description # HQ-INTRANET-SRV FastEthernet0
+ switchport mode access
+ switchport access vlan 30
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+interface FastEthernet0/5
+ description # MGMT-PC1 FastEthernet0
+ switchport mode access
+ switchport access vlan 99
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ no shutdown
+interface GigabitEthernet0/1
+ description # Trunk to HQ-DSW1 Fa0/1
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,30,99,999
+ switchport nonegotiate
+ no shutdown
+interface GigabitEthernet0/2
+ description # Redundant trunk to HQ-DSW2 Fa0/1
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,30,99,999
+ switchport nonegotiate
+ no shutdown
+interface range FastEthernet0/6-24
+ description # UNUSED - parked in VLAN 999
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+interface Vlan 99
+ description # In-band switch management
+ ip address 10.10.99.11 255.255.255.0
+ no shutdown
+ip default-gateway 10.10.99.1
+ip access-list standard SSH-MGMT
+ permit 10.10.99.0 0.0.0.255
+ deny any 
+logging host 10.10.30.10
+logging trap informational
+line console 0
+ login local
+ logging synchronous
+ exec-timeout 10 0
+line vty 0 15
+ access-class SSH-MGMT in
+ login local
+ transport input ssh
+ exec-timeout 10 0
+end
+copy running-config startup-config
