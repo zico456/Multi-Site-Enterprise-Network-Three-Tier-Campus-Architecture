@@ -1,0 +1,144 @@
+ip routing
+spanning-tree mode rapid-pvst
+vlan 10
+ name HQ-USERS
+vlan 20
+ name HQ-ADMIN
+vlan 30
+ name HQ-SERVERS
+vlan 99
+ name MANAGEMENT
+vlan 999
+ name UNUSED-NATIVE
+ip access-list extended USER-SECURITY
+ remark # Allow DHCP client requests to relay/server
+ permit udp any eq 68 any eq 67
+ remark # Allow DNS to HQ-INFRA-SRV by port number
+ permit udp any host 10.10.30.10 eq 53
+ permit tcp any host 10.10.30.10 eq 53
+ remark # Block user access to management VLAN and routed infrastructure
+ deny tcp any 10.10.99.0 0.0.0.255 eq 22 
+ deny ip any 10.10.99.0 0.0.0.255 
+ deny tcp any 10.255.0.0 0.0.255.255 eq 22 
+ deny ip any 10.255.0.0 0.0.255.255 
+ remark # Allow approved web services
+ permit tcp any host 10.10.30.20 eq 80
+ permit tcp any host 10.10.30.20 eq 443
+ permit tcp any host 203.0.113.2 eq 80
+ permit tcp any host 203.0.113.2 eq 443
+ remark # Allow diagnostic ICMP and all enterprise data traffic
+ permit icmp any any
+ permit ip any 10.0.0.0 0.255.255.255
+ remark # Explicitly deny other unapproved traffic
+ deny ip any any 
+interface Loopback0
+ description Stable OSPF router ID and SSH target
+ ip address 10.255.255.12 255.255.255.255
+interface GigabitEthernet0/1
+ description # Routed uplink to HQ-R1 Gi0/1
+ no switchport
+ ip address 10.255.1.6 255.255.255.252
+ no shutdown
+interface GigabitEthernet0/2
+ description UNUSED
+ shutdown
+interface FastEthernet0/1
+ description 802.1Q trunk to HQ-ASW1 Gi0/2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,30,99,999
+ switchport nonegotiate
+ no shutdown
+interface FastEthernet0/2
+ description 802.1Q trunk to HQ-ASW2 Gi0/2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 20,99,999
+ switchport nonegotiate
+ no shutdown
+interface range FastEthernet0/23-24
+ description #LACP members to HQ-DSW1 Fa0/23-24
+ channel-protocol lacp
+ channel-group 1 mode active
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ no shutdown
+interface Port-channel1
+ description # LACP distribution interconnect
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,99,999
+ switchport nonegotiate
+ no shutdown
+interface range FastEthernet0/3-22
+ description UNUSED - parked in VLAN 999
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+interface Vlan10
+ description HQ-USERS HSRP gateway
+ ip address 10.10.10.3 255.255.255.0
+ standby 10 ip 10.10.10.1
+ standby 10 priority 100
+ standby 10 preempt
+ ip helper-address 10.10.30.10
+ ip access-group USER-SECURITY in
+ no shutdown
+interface Vlan20
+ description HQ-ADMIN HSRP gateway
+ ip address 10.10.20.3 255.255.255.0
+ standby 20 ip 10.10.20.1
+ standby 20 priority 110
+ standby 20 preempt
+ ip helper-address 10.10.30.10
+ ip access-group USER-SECURITY in
+ no shutdown
+interface Vlan30
+ description HQ-SERVERS HSRP gateway
+ ip address 10.10.30.3 255.255.255.0
+ standby 30 ip 10.10.30.1
+ standby 30 priority 100
+ standby 30 preempt
+ no shutdown
+interface Vlan99
+ description # MANAGEMENT HSRP gateway
+ ip address 10.10.99.3 255.255.255.0
+ standby version 2
+ standby 99 ip 10.10.99.1
+ standby 99 priority 110
+ standby 99 preempt
+ no shutdown
+interface Vlan999
+ description Native parking VLAN - intentionally unnumbered
+ no ip address
+ shutdown
+spanning-tree vlan 20,99 root primary
+spanning-tree vlan 10,30,999 root secondary
+router ospf 10
+ passive-interface default
+ no passive-interface GigabitEthernet0/1
+ network 10.255.255.12 0.0.0.0 area 0
+ network 10.255.1.4 0.0.0.3 area 0
+ network 10.10.10.0 0.0.0.255 area 0
+ network 10.10.20.0 0.0.0.255 area 0
+ network 10.10.30.0 0.0.0.255 area 0
+ network 10.10.99.0 0.0.0.255 area 0
+ip access-list standard SSH-MGMT
+ permit 10.10.99.0 0.0.0.255
+ deny any log
+logging host 10.10.30.10
+logging trap informational
+line console 0
+ login local
+ logging synchronous
+ exec-timeout 10 0
+line vty 0 15
+ access-class SSH-MGMT in
+ login local
+ transport input ssh
+ exec-timeout 10 0
+end
+copy running-config startup-config
