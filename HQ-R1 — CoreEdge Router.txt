@@ -1,0 +1,51 @@
+HQ-R1 — Core/Edge Router
+Primary jobs: route between campus, branches, and ISP; form four OSPF adjacencies; originate the default route; and perform
+PAT at the enterprise edge.
+Configure in this order
+• Apply the common IOS baseline with hostname HQ-R1.
+• Create Loopback0 as 10.255.255.1/32 before starting OSPF.
+• Address Gi0/0 toward HQ-DSW1 and Gi0/1 toward HQ-DSW2; mark both as NAT inside.
+• Address Gi0/2 toward ISP-R1 as 198.51.100.1/30; mark it NAT outside.
+• Address Serial0/0/0 and Serial0/0/1 toward the branches; mark both NAT inside.
+• Because HQ is DCE, set clock rate 64000 on both active serial interfaces.
+• Create NATINSIDE, configure PAT overload on Gi0/2, and install a static default route to 198.51.100.2.
+• Configure OSPF process 10, keep interfaces passive by default, enable hellos only on the two campus transit links and two
+serial links, and originate the default.
+• Apply SSH-MGMT to VTY, configure Syslog, and save
+
+Required interface values
+
+      Interface	     Address	     Role
+Loopback 0	10.255.255.1/32	OSPF ID and SSH target
+Gi0/0	10.255.1.1/30	To DSW1, NAT inside
+Gi0/1	10.255.1.5/30	To DSW2, NAT inside 
+Gi0/2	198.51.100.1/30	To ISP, NAT outside
+S0/0/0	10.255.0.1/30	TO BR1, DCE, NAT inside
+S0/0/1	10.255.0.5/30	To BR2,DCE, NAT inside
+
+
+<h>Critical routing and NAT</h>
+
+ip access-list standard NATINSIDE
+permit 10.0.0.0 0.255.255.255
+ip nat inside source list NATINSIDE interface GigabitEthernet0/2 overload
+
+ip route 0.0.0.0 0.0.0.0 198.51.100.2
+
+router ospf 10
+passive-interface default
+no passive-interface GigabitEthernet0/0
+no passive-interface GigabitEthernet0/1
+no passive-interface Serial0/0/0
+no passive-interface Serial0/0/1
+default-information originate
+
+<h>Verify</h>
+show ip interface brief
+show ip ospf neighbor
+show ip route
+show ip nat statistics
+show ip nat translations
+show access-lists NATINSIDE
+
+
